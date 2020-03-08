@@ -1,0 +1,8 @@
+pyzmq
+aioetcd3
+PyYAML
+sdnotify
+
+pytest
+pytest_mock
+pycodestyle
