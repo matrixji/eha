@@ -4,16 +4,19 @@ setup for eha
 
 from setuptools import setup, find_packages
 
-VERSION=0.2
+VERSION=0.3
 
 setup(
     name='eha',
     version=VERSION,
     description='A High Availability service framework based on etcd.',
+    long_description=(
+      "eha is a framework for build High Availability application based etcd."
+    ),
     author='Ji Bin',
     author_email='matrixji@live.com',
     url='https://github.com/matrixji/eha',
-    license='Apache',
+    license='MIT',
     packages = find_packages(),
     platforms=['linux'],
     python_requires='>=3.6',
