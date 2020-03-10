@@ -8,6 +8,7 @@ from socket import gethostname
 import logging
 from logging import getLogger, StreamHandler, WARNING, ERROR, INFO, DEBUG
 from logging.handlers import RotatingFileHandler
+import asyncio
 from asyncio import AbstractEventLoop, get_event_loop, wait, ensure_future
 from aioetcd3.client import client as etcd_client
 from aioetcd3 import transaction
@@ -27,6 +28,13 @@ class ServiceAgent:
         self.timeout = timeout
         self.lease = None
 
+    async def etcd_avaliable(self):
+        try:
+            await self.etcd_client.status()
+            return True
+        except Exception:
+            return False
+
     async def register(self):
         """
         try register to etcd, if ok for create, return True
@@ -36,6 +44,8 @@ class ServiceAgent:
         /eha/services/<name>/<index>/current:
             current service instance node
         """
+        if not await self.etcd_avaliable():
+            return True
         for index in range(self.active_count):
             key_curr = '/eha/service/{}/{}/current'.format(self.name, index)
             self.lease = await self.etcd_client.grant_lease(ttl=self.timeout)
@@ -58,28 +68,30 @@ class ServiceAgent:
         return False
 
     async def keepalive(self):
-        await self.etcd_client.refresh_lease(self.lease)
-        for index in range(self.active_count):
-            key_curr = '/eha/service/{}/{}/current'.format(self.name, index)
-            value, _ = await self.etcd_client.get(key_curr)
-            if value and value.decode('utf-8') == self.uuid:
-                self.logger.info('keepalive for %s success', self.uuid)
-                return
-        raise RuntimeError('Keepalive failed, maybe already expired')
+        if await self.etcd_avaliable():
+            await self.etcd_client.refresh_lease(self.lease)
+            for index in range(self.active_count):
+                key_curr = '/eha/service/{}/{}/current'.format(self.name, index)
+                value, _ = await self.etcd_client.get(key_curr)
+                if value and value.decode('utf-8') == self.uuid:
+                    self.logger.info('keepalive for %s success', self.uuid)
+                    return
+            raise RuntimeError('Keepalive failed, maybe already expired')
 
     async def unregister(self):
-        for index in range(self.active_count):
-            key_curr = '/eha/service/{}/{}/current'.format(self.name, index)
-            success, _ = await self.etcd_client.txn(compare=[
-                transaction.Version(key_curr) > 0,
-                transaction.Value(key_curr) == self.uuid
-            ], success=[
-                KV.delete.txn(key_curr)
-            ], fail=[
-            ])
-            if success:
-                self.logger.info(
-                    'service unregister: index=%d, uuid=%s', index, self.uuid)
+        if await self.etcd_avaliable():
+            for index in range(self.active_count):
+                key_curr = '/eha/service/{}/{}/current'.format(self.name, index)
+                success, _ = await self.etcd_client.txn(compare=[
+                    transaction.Version(key_curr) > 0,
+                    transaction.Value(key_curr) == self.uuid
+                ], success=[
+                    KV.delete.txn(key_curr)
+                ], fail=[
+                ])
+                if success:
+                    self.logger.info(
+                        'service unregister: index=%d, uuid=%s', index, self.uuid)
 
 
 class Server:
@@ -112,9 +124,16 @@ class Server:
     async def watch_service_event(self):
         etcd_client = self.connect_etcd()
         prefix = range_prefix('/eha/service/')
-        async with etcd_client.watch_scope(prefix) as resp:
-            async for event in resp:
-                await self.handle_service_event(event)
+        while True:
+            try:
+                async with etcd_client.watch_scope(prefix) as resp:
+                    async for event in resp:
+                        await self.handle_service_event(event)
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                self.logger.warning('seems etcd not avaliable, wait 5 seconds')
+                await asyncio.sleep(5)
 
     async def handle_service_event(self, event):
         key_path = event.key.decode('utf-8')

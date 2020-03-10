@@ -6,7 +6,6 @@ from logging import getLogger
 from zmq import REP, PUB, SNDMORE
 from zmq.asyncio import Context
 
-
 class Server:
 
     transaction = 0
@@ -52,6 +51,8 @@ class Server:
                     'error while handle(seq: %d) %s:\n%s',
                     seq, action, traceback.format_exc())
                 return dict(error=1, message=str(err))
+            except Exception as ex:
+                self.logger.error(type(ex))
         else:
             self.logger.error('register with action: %s not exist', action)
             return dict(error=1, message='Invalud action: {}'.format(action))

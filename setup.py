@@ -4,7 +4,7 @@ setup for eha
 
 from setuptools import setup, find_packages
 
-VERSION=0.1
+VERSION=0.2
 
 setup(
     name='eha',
