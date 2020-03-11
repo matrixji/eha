@@ -3,6 +3,7 @@ import argparse
 import asyncio
 from asyncio import subprocess
 import logging
+import signal
 from logging import getLogger, StreamHandler, WARNING, ERROR, INFO, DEBUG
 from logging.handlers import RotatingFileHandler
 from asyncio import subprocess
@@ -40,16 +41,21 @@ class Runner:
         self.process_running = False
         self.subscribed = False
         self.systemd = systemd
+        self.task_client_run = None
 
     async def client_wait_service_member_delete(self):
         if not self.subscribed:
             self.client.subscribe()
             self.subscribed = True
         while True:
-            event = await self.client.fetch_event()
-            if event['service'] == self.name and event['event'] == 'DELETE':
-                self.logger.info('receive delete event from agent, again ...')
-                break
+            try:
+                event = await self.client.fetch_event()
+                if event['service'] == self.name and event['event'] == 'DELETE':
+                    self.logger.info('receive delete event from agent, again ...')
+                    return True
+            except asyncio.CancelledError:
+                return False
+
 
     async def wait_process_done(self, future):
         await self.process.wait()
@@ -99,18 +105,29 @@ class Runner:
                 await self.client_run_keepalive()
             except RuntimeError as err:
                 self.logger.warning('runtime error: %s', err)
-                await self.client_wait_service_member_delete()
+                do_continue = await self.client_wait_service_member_delete()
+                if not do_continue:
+                    break
             except Exception as error:
                 self.logger.error('unexpected error: %s', error)
+
+    def do_exit(self):
+        if self.process:
+            self.process.terminate()
+        elif self.task_client_run:
+            self.task_client_run.cancel()
 
     def run(self):
         if not self.command:
             self.logger.error('command not provided')
             exit(1)
         loop = asyncio.get_event_loop()
-        task_client_run = asyncio.ensure_future(self.client_run())
+        self.task_client_run = asyncio.ensure_future(self.client_run())
+        loop.add_signal_handler(signal.SIGTERM, self.do_exit)
+        loop.add_signal_handler(signal.SIGKILL, self.do_exit)
+        loop.add_signal_handler(signal.SIGINT, self.do_exit)
         loop.run_until_complete(asyncio.wait([
-            task_client_run,
+            self.task_client_run,
         ]))
 
 
