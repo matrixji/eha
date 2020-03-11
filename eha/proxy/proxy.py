@@ -124,7 +124,6 @@ class Runner:
         loop = asyncio.get_event_loop()
         self.task_client_run = asyncio.ensure_future(self.client_run())
         loop.add_signal_handler(signal.SIGTERM, self.do_exit)
-        loop.add_signal_handler(signal.SIGKILL, self.do_exit)
         loop.add_signal_handler(signal.SIGINT, self.do_exit)
         loop.run_until_complete(asyncio.wait([
             self.task_client_run,
