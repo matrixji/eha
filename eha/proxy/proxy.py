@@ -65,9 +65,9 @@ class Runner:
         """
         return if continue
         """
+        failure_count = 0
         while self.process_running:
             # wait process exit
-            failure_count = 0
             future = asyncio.Future()
             wait_task = asyncio.ensure_future(self.wait_process_done(future))
             try:

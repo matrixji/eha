@@ -76,7 +76,9 @@ class ServiceAgent:
                 if value and value.decode('utf-8') == self.uuid:
                     self.logger.info('keepalive for %s success', self.uuid)
                     return
-            raise RuntimeError('Keepalive failed, maybe already expired')
+            # keepalive failed, try register
+            if not await self.register():
+                raise RuntimeError('Keepalive failed, maybe already expired')
 
     async def unregister(self):
         if await self.etcd_avaliable():
