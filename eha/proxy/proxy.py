@@ -84,6 +84,9 @@ class Runner:
                     failure_count += 1
                     if failure_count > 3:
                         break
+                except Exception as error:  #
+                    # ignore other error currently
+                    self.logger.warning('unexpected error: %s', error)
         await self.client.unregister()
         if self.process_running:
             self.logger.info('keepalive failed, but process running, killing ...')
@@ -109,7 +112,7 @@ class Runner:
                 if not do_continue:
                     break
             except Exception as error:
-                self.logger.error('unexpected error: %s', error)
+                self.logger.warning('unexpected error: %s', error)
 
     def do_exit(self):
         if self.process:

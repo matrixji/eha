@@ -34,7 +34,7 @@ class Client:
             active_count=active_count)
         await self.req_sock.send_json(msg)
         resp = await self.req_sock.recv_json()
-        if resp.get('error') != 0:
+        if not resp or resp.get('error') != 0:
             raise RuntimeError(str(resp))
 
     async def keepalive(self):
@@ -46,7 +46,7 @@ class Client:
         self.logger.debug('waiting keepalive resp ...')
         resp = await self.req_sock.recv_json()
         self.logger.debug('resp for keepalive: %s', resp)
-        if resp.get('error') != 0:
+        if not resp or resp.get('error') != 0:
             raise RuntimeError(str(resp))
 
     async def unregister(self):
